@@ -2,8 +2,6 @@
 # Author:  Josh Collier
 # Created: 06 Nov 2024
 
-# THIS IS STILL A WORK IN PROGRESS
-
 # --- Imports ---
 import pandas as pd
 import numpy as np

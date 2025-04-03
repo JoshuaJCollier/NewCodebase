@@ -6,9 +6,19 @@
 import numpy as np
 from scipy.signal import butter, lfilter
 import cv2
+import matplotlib.pyplot as plt
 
 
 # --- Functions ---
+def plotParams(title='',xlabel='',ylabel='',xlim=[],ylim=[],legend='',size=()):
+    if title != '': plt.title(title, fontsize=14) # - 5m 600um core MMF - 0.83m distance
+    if xlabel != '': plt.xlabel(xlabel, fontsize=12)
+    if ylabel != '': plt.ylabel(ylabel, fontsize=12)
+    if xlim != []: plt.xlim(xlim)
+    if ylim != []: plt.ylim(ylim)
+    if legend != '': plt.legend(title=legend)
+    if size != (): plt.rcParams["figure.figsize"] = size
+
 def findNearest(array, value): # for array [3, 6, 8, 9], value 7, returns 1 or 2
     """ Finds the nearest value to the value provided in an array (returns the index of this)
 
