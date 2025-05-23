@@ -31,10 +31,10 @@ def generateMetadata(source, source_size, dist, baseline, pol = None, parts = []
     metadata['datetime'] = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
     metadata['parameters'] = params # {'snspd integration':'10ms', }
     metadata['source'] = source #'LED'
-    metadata['source size'] = source_size #'1000um'
-    metadata['distance'] = dist #'60mm'
-    metadata['baseline'] = baseline #'127um'
-    metadata['polarization'] = pol #'0'
+    metadata['source size (m)'] = source_size #'1000um'
+    metadata['distance (m)'] = dist #'60mm'
+    metadata['baseline (m)'] = baseline #'127um'
+    metadata['polarization (deg)'] = pol #'0'
     metadata['parts'] = parts # parts = ['LED', 'Collimating lens', 'Polarizer', 'SM VGA', 'Pol controllers', 'optical delay lines', '50:50 BS', 'SNSPDs']
     return metadata
 

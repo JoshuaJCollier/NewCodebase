@@ -18,11 +18,28 @@ from myTools import movingAverage, findNearest
 from visibilityTools import getVisibility
 
 def quit(moku=None, motor=None, laser=None):
+    """ Quits all open devices
+
+    Args:
+        moku (_type_, optional): Moku object (from Moku:Pro). Defaults to None.
+        motor (_type_, optional): Motor object (from Kinesis motor / KCube). Defaults to None.
+        laser (_type_, optional): Laser object (from uITLA). Defaults to None.
+    """
     if moku != None: quitMoku(moku)
     if motor != None: quitMotor(motor)
     if laser != None: turnOffLaser(laser)
-    
+
 def removeOutliers(data1, data2, exclusion=0.5):
+    """ Removes outlier values from a pair of outputs (both sides of the output) from an interferometer
+
+    Args:
+        data1 (arr): Array of data out from an interferometer
+        data2 (arr): Array of data out from the other arm of the interferometer
+        exclusion (float, optional): Percentage buffer around the mean to not count as outliers (this should be able to be low). Defaults to 0.5.
+
+    Returns:
+        tuple: Both data outputs without their outliers, and also the middle point in the interference
+    """
     data_sum = data1 + data2
     avg_tot = np.average(data_sum)
     
@@ -42,6 +59,14 @@ def removeOutliers(data1, data2, exclusion=0.5):
     return data1, data2, mid
 
 def findVis(data):
+    """ Find peaks and troughs of data set and then find the visibility from these
+
+    Args:
+        data (array): Data that you want to process
+
+    Returns:
+        tuple: Visibility, and the values used to get it
+    """
     slc = gaussian_filter1d(data, sigma=2) # filter the peaks the remove noise,
     peaks = find_peaks(slc)[0] # [0] returns only locations 
     troughs = find_peaks(-slc)[0] # [0] returns only locations 
@@ -62,25 +87,22 @@ def findVis(data):
     visibility = np.abs(getVisibility(max_val, min_val))
     return visibility, used_vals
         
-def menloDataRun(uITLA = False): 
+def menloDataRun(uITLA = False, first_pos=0e-3, last_pos=6e-3, integration_time=1, total_time=10): 
+    # Initialise used devices
     myLaser = turnOnLaser() if uITLA else None # chuck this at the beginning any time there is a laser
-    
-    first_pos = 0e-3
-    last_pos = 6e-3
-    integration_time = 1
-    total_time = 10
-    osc = initialisePersistMokuPro(integration_time=integration_time)
+    osc = initialiseMokuProOsc(integration_time=integration_time)
     motor = initialiseMotor("26003312")
+
+    # Move to start position
     moveMotor(motor, pos=first_pos, acc=1e-3, max_vel=1e-3, delay=0)
     motor.wait_move()
-    print('Moving')
+
+    # Move to end position
     moveMotor(motor, pos=last_pos, acc=1e-3, max_vel=last_pos/total_time, delay=0) # position in m, time in s
     dataList = []
     start = time.perf_counter()
     while (time.perf_counter()-start) < total_time:
-        #print('Start {}th at {}s'.format(i, time.perf_counter()-start))
         dataList.append(osc.get_data(wait_complete=True))
-    print('Finished {}s'.format(time.perf_counter()-start))
     
     data1 = np.array([])
     data2 = np.array([])
@@ -155,108 +177,91 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
     
     # Process data
     for i in range(len(dataList)):
-        a = np.array(dataList[i]['ch1'])
-        b = np.array(dataList[i]['ch2'])
-        data1 = np.concatenate((data1, a)) # CH3 (green)
-        data2 = np.concatenate((data2, b)) # CH4 (yellow)
+        data1 = np.concatenate((data1, np.array(dataList[i]['ch1']))) # CH1 
+        data2 = np.concatenate((data2, np.array(dataList[i]['ch2']))) # CH2
     
-    if len(data1) > len(data2):
-        data1 = data1[:len(data2)]
-    else:
-        data2 = data2[:len(data1)]
+    if len(data1) > len(data2): data1 = data1[:len(data2)] # Find the shortest one and make that the standard
+    else: data2 = data2[:len(data1)]
         
     ch3_offset, ch4_offset = 0, 0
     count_to_signal = 100e-6 # 100e-6 is for 100uV / count
-    signal_buckets = 1e-2 # 10ms buckets
-    data1 = np.round((data1+ch3_offset)/(count_to_signal*signal_buckets)).astype(int)
-    data2 = np.round((data2+ch4_offset)/(count_to_signal*signal_buckets)).astype(int)
+    snspd_integration_time = 1e-2 # 10ms buckets
+    data1 = np.round((data1+ch3_offset)/(count_to_signal*snspd_integration_time)).astype(int)
+    data2 = np.round((data2+ch4_offset)/(count_to_signal*snspd_integration_time)).astype(int)
     
     #min_allowed, max_allowed = 0, 1e6
     #data1 = data1[(min_allowed<data1)&(data1<max_allowed)]
     #data2 = data2[(min_allowed<data2)&(data2<max_allowed)]
     
-    length = len(data1)
     # total number of points / total time = data rate -> data rate * signal buckets = number of points that should be around the same, the 5 is just an extra offset value
-    averaging_no = int((length/total_time)*signal_buckets / 5) 
+    averaging_no = int((len(data1)/total_time)*snspd_integration_time / 5) 
     print('Averaging: {} points (from {} total points)'.format(averaging_no, len(data1)))
     
-    dividable_len = int(length//averaging_no * averaging_no)
+    dividable_len = int(len(data1)//averaging_no * averaging_no)
     data1 = np.average(data1[0:dividable_len].reshape(-1, averaging_no), axis=1)
     data2 = np.average(data2[0:dividable_len].reshape(-1, averaging_no), axis=1)
     
-    length = len(data1)
-    print('Final len: {}'.format(length))
-    positions = np.linspace(first_pos, last_pos, length)*2e3 # Converted to mm path length added
-    
-    
     modified_data1, modified_data2, mid_index = removeOutliers(data1, data2, exclusion= 0.5)
-    #mid_index = getMidPoint(data1, data2, exclusion=0.5) #TODO: should probably change this to a rolling average
-    positions = positions - positions[mid_index] # Finding the fringe peak
-    
-    # finding max and min
     data1_vis, valsUsed1 = findVis(modified_data1)
     data2_vis, valsUsed2 = findVis(modified_data2)
+    vis = np.max([data1_vis, data2_vis])
     
     print('Visibility from data1: {}, from data2: {}'.format(data1_vis, data2_vis))
+    positions = np.linspace(first_pos, last_pos, len(data1))*2e3 # Converted to mm path length added
+    positions = positions - positions[mid_index] # Finding the fringe peak
     
     osc.enable_rollmode(True)
     quit(moku=osc, motor=motor)
     
+    plot_params = {'ylim':[0, 1e6], 'xlim':[], 'title':'Counts vs Position', 
+                   'xlabel':'Path length difference (mm)', 'ylabel':'Counts'}
     if saving:
-        #dbfile = open('{}.pkl'.format(filename), 'ab') #pickle.dump({'Outputs1':data1, 'Outputs2':data2, 'Positions':positions}, dbfile)
         all_outs = np.array([data1, data2, positions]).T
-        headers = ['Output1', 'Output2', 'Positions']
+        headers = ['Output1 (cnt)', 'Output2 (cnt)', 'Positions (mm)']
         df = pd.DataFrame(all_outs, columns=headers) #df.to_csv('{}.csv'.format(filename), header=True, sep=',')
-        metadata = generateMetadata('LED', source_size, dist, baseline, pol=0, parts=[], params = {'snspd integration':'10ms', 'volt per count':'100uV/cnt', 'moku inputs':'DC 1Mohm 400mVpp', 'measured vis':np.max([data1_vis, data2_vis])})
+        metadata = generateMetadata('LED', source_size, dist, baseline, pol=0, parts=[], 
+                                    params = {'plot params':plot_params, 'snspd integration (s)':snspd_integration_time, 
+                                              'volt per count':count_to_signal, 'moku inputs':'DC 1Mohm 400mVpp', 
+                                              'measured vis (ch1, ch2)':[data1_vis, data2_vis]})
         save('interferometer', df, metadata)
     
     print('Plotting')
-    plt.figure(0)
+    fig, ax = plt.figure(0)
     plt.plot(positions, modified_data1, label='SNSPD 1') # the x2 for all these is because the beam is reflected
     plt.plot(positions, modified_data2, label='SNSPD 2')
     plt.plot(positions[valsUsed1], data1[valsUsed1], marker='o', label='Vals Used 1')
     plt.plot(positions[valsUsed2], data2[valsUsed2], marker='o', label='Vals Used 2')
-    plt.xlabel('Path length difference')
-    plt.ylabel('Counts')
-    plt.title('Counts vs Position (outliers removed)')
-    plt.ylim([0, 1e6])
+    plt.setp(ax, xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
+    #plt.xlabel('Path length difference')
+    #plt.ylabel('Counts')
+    #plt.title('Counts vs Position (outliers removed)')
+    #plt.ylim([0, 1e6])
     plt.legend()
     plt.show()
 
-def testingLoad(campaign):
-    df, metadata = load(campaign, 1)
+def testingLoad(campaign, index):
+    df, metadata = load(campaign, index)
     
-    data1 = np.array(df['Output1'])
-    data2 = np.array(df['Output2'])
-    positions = np.array(df['Positions'])
+    data1 = np.array(df['Output1 (cnt)'])
+    data2 = np.array(df['Output2 (cnt)'])
+    positions = np.array(df['Positions (mm)'])
     data1, data2, mid_index = removeOutliers(data1, data2, exclusion=0.3)
     positions = positions - positions[mid_index]
     data1_vis, valsUsed1 = findVis(data1)
     data2_vis, valsUsed2 = findVis(data2)
-    print(data1_vis, data2_vis)
-    print(data1[valsUsed1])
-    print(data2[valsUsed2])
     
     print('Plotting')
-    plt.figure(0)
+    fig, ax = plt.figure(0)
     
     #plt.plot(positions, gaussian_filter1d(data1, sigma=1), label='SNSPD 1 smoothed') # the x2 for all these is because the beam is reflected
     plt.plot(positions, data1, label='SNSPD 1') # the x2 for all these is because the beam is reflected
     plt.plot(positions, data2, label='SNSPD 2')
     plt.plot(positions[valsUsed1], data1[valsUsed1], marker='o', label='Vals Used 1')
     plt.plot(positions[valsUsed2], data2[valsUsed2], marker='o', label='Vals Used 2')
-    plt.xlabel('Path length difference')
-    plt.ylabel('Counts')
-    plt.title('Counts vs Position')
-    plt.ylim([0, 1e6])
+    plt.setp(ax, xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
     plt.legend()
     plt.show()
     
+testingLoad('interferometer', 1)
 
-#testingLoad('interferometer')
-#motor = initialiseMotor("26003312")
-#moveMotor(motor, pos=0e-6, acc=1e-3, max_vel=1e-3, delay=0)
-#motor.wait_move() # Move to start
-#print('Moved')
-
-snspdMeasure(saving=True, source_size='500um')
+#snspdMeasure(saving=True, source_size='500um')
