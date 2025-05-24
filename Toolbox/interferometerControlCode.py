@@ -83,7 +83,6 @@ def findVis(data):
         min_val = (data[troughs[min_pos]] + data[troughs[min_pos+1]])/2
         used_vals = [troughs[min_pos], peaks[max_pos], troughs[min_pos+1]]
 
-    print(max_val, min_val)
     visibility = np.abs(getVisibility(max_val, min_val))
     return visibility, used_vals
         
@@ -213,25 +212,23 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
     osc.enable_rollmode(True)
     quit(moku=osc, motor=motor)
     
-    plot_params = {'ylim':[0, 1e6], 'xlim':[], 'title':'Counts vs Position', 
-                   'xlabel':'Path length difference (mm)', 'ylabel':'Counts'}
+    plot_params = "plt.setp(plt.gca(), xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')"
     if saving:
         all_outs = np.array([data1, data2, positions]).T
         headers = ['Output1 (cnt)', 'Output2 (cnt)', 'Positions (mm)']
         df = pd.DataFrame(all_outs, columns=headers) #df.to_csv('{}.csv'.format(filename), header=True, sep=',')
-        metadata = generateMetadata('LED', source_size, dist, baseline, pol=0, parts=[], 
-                                    params = {'plot params':plot_params, 'snspd integration (s)':snspd_integration_time, 
-                                              'volt per count':count_to_signal, 'moku inputs':'DC 1Mohm 400mVpp', 
-                                              'measured vis (ch1, ch2)':[data1_vis, data2_vis]})
+        metadata = generateMetadata('LED', source_size, dist, baseline, pol=0, parts={}, 
+                                    params = {'plot params':plot_params, 'snspd integration (s)':snspd_integration_time, 'volt per count':count_to_signal, 
+                                              'moku inputs':'DC 1Mohm 400mVpp', 'measured vis':{'ch1':data1_vis,'ch2':data2_vis}, 'data runtime':total_time})
         save('interferometer', df, metadata)
     
     print('Plotting')
-    fig, ax = plt.figure(0)
+    plt.figure(0)
     plt.plot(positions, modified_data1, label='SNSPD 1') # the x2 for all these is because the beam is reflected
     plt.plot(positions, modified_data2, label='SNSPD 2')
     plt.plot(positions[valsUsed1], data1[valsUsed1], marker='o', label='Vals Used 1')
     plt.plot(positions[valsUsed2], data2[valsUsed2], marker='o', label='Vals Used 2')
-    plt.setp(ax, xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
+    plt.setp(plt.gca(), xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
     #plt.xlabel('Path length difference')
     #plt.ylabel('Counts')
     #plt.title('Counts vs Position (outliers removed)')
@@ -251,17 +248,17 @@ def testingLoad(campaign, index):
     data2_vis, valsUsed2 = findVis(data2)
     
     print('Plotting')
-    fig, ax = plt.figure(0)
+    plt.figure(0)
     
     #plt.plot(positions, gaussian_filter1d(data1, sigma=1), label='SNSPD 1 smoothed') # the x2 for all these is because the beam is reflected
     plt.plot(positions, data1, label='SNSPD 1') # the x2 for all these is because the beam is reflected
     plt.plot(positions, data2, label='SNSPD 2')
     plt.plot(positions[valsUsed1], data1[valsUsed1], marker='o', label='Vals Used 1')
     plt.plot(positions[valsUsed2], data2[valsUsed2], marker='o', label='Vals Used 2')
-    plt.setp(ax, xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
+    plt.setp(plt.gca(), xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
     plt.legend()
     plt.show()
     
-testingLoad('interferometer', 1)
+#testingLoad('interferometer', 1)
 
-#snspdMeasure(saving=True, source_size='500um')
+snspdMeasure(saving=True, source_size='500um')

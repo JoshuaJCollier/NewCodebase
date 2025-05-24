@@ -10,7 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
 
-def generateMetadata(source, source_size, dist, baseline, pol = None, parts = [], params = {}):
+def generateMetadata(source, source_size, dist, baseline, pol = None, parts = {}, params = {}):
     """_summary_
 
     Args:
