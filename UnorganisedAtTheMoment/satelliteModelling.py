@@ -423,9 +423,7 @@ generate_phase_time_plot()
 
 plt.show()
 
-
-'''
-References:
+''' ----------- References -----------
 [1] Laser Beam Propagation through Random Media. Andrews, 2005
 [2] Phase Noise in Real-World Twin-Field Quantum Key Distribution. Bertaina, 2023
 [3] Optical timing jitter due to atmospheric turbulence: comparison of frequency comb measurements to predictions from micrometeorological sensors. Cladwell, 2020
@@ -434,10 +432,7 @@ References:
 [6] GRACE-FO one Rees, 20??
 '''
 
-
-
-'''
-# Dead code
+''' -------- Depreicated code ----------
 LEO_used = LEO_max_arr
 xC, yC = pol2cart(LEO_used['r'], LEO_used['a'])
 a_len = np.sqrt((xC-xA)**2 + (yC-yA)**2)

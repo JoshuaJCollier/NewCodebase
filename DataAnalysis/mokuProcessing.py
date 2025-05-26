@@ -8,9 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-sys.path.append('../')
+sys.path.insert(0, sys.path[0]+'\\..\\Toolbox')
 import visibilityTools as visTools # type: ignore
-import myTools as tools # type: ignore
+import generalTools as tools # type: ignore
 
 # --- Functions ---
 def mokuProPhasemeter(curr_dir, filename):

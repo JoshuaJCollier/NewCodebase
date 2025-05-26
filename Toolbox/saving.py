@@ -1,6 +1,7 @@
 # Saving and loading data, generalised format
 import os
 import sys
+import csv
 import inspect
 import pandas as pd
 import numpy as np
@@ -51,7 +52,7 @@ def save(campaign, data, metadata):
     isExist = os.path.exists(path)
     if not isExist:
         os.makedirs(path)
-        
+    
     os.chdir('C:\\Users\\josh\\OneDrive - UWA\\UWA\\PhD\\3. Data\\{}'.format(campaign.title()))
     existing = []
     files_existing = []
@@ -74,6 +75,11 @@ def save(campaign, data, metadata):
         yaml.dump(metadata, file)
         
     print('Saved {} parquet and yaml'.format(filename))
+    
+    #with open(r'document_register.csv', 'a') as f:
+    #        writer = csv.writer(f)
+    #        writer.writerow(metadata)
+    
     return filename
     
 def load(campaign, index):
@@ -91,5 +97,33 @@ def load(campaign, index):
             print(exc)
     
     return data, metadata
+
+def build_document_reg(campaign):
+    os.chdir('C:\\Users\\josh\\OneDrive - UWA\\UWA\\PhD\\3. Data\\{}'.format(campaign.title()))
+    
+    register_vars = ['source', 'source size (m)', 'baseline (m)', 'distance (m)']
+    header = ['filename'] + register_vars + ['run length (s)', 'vis1', 'vis2']
+    rows = [header]
+    
+    for filename in glob.glob("*.yaml"):
+        with open('{}'.format(filename), 'r') as file:
+            try:
+                metadata = yaml.safe_load(file)
+                #print(metadata)
+                row = [filename]
+                for aspect in register_vars:
+                    print(metadata[aspect])
+                    row.append(metadata[aspect])
+                row.append(metadata['parameters']['data runtime'])
+                row.append(metadata['parameters']['measured vis']['ch1'])
+                row.append(metadata['parameters']['measured vis']['ch2'])
+                rows.append(row)
+            except (yaml.YAMLError, KeyError) as exc:
+                print(exc)
+    
+    print(rows)
+    np.savetxt('{}_Document_Register.csv'.format(campaign.title()), np.array(rows), delimiter=',', fmt='%s')
+
+#build_document_reg('interferometer')
 
 #print(int('file_0001.parquet'.split('.')[0].split('_')[1]))

@@ -5,11 +5,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-import pickle
 
 sys.path.insert(0, sys.path[0]+'\\..\\Toolbox')
 import visibilityTools as visTools # type: ignore
-import myTools as tools # type: ignore
+import generalTools as tools # type: ignore
 
 
 
@@ -178,26 +177,29 @@ def LEDcoupledMMFInterferometer():
 #LEDMMFTest()
 
 def plotTheoryCurve(): # DATA FROM LATE MAY 2025 
-    baseline_space = np.linspace(1e-9, 500e-6, 1000)
+    baseline_space = np.linspace(1e-9, 500e-6, 1000) # meters
     
     wavelength = 1450e-9 # 105nm FWHM
     path_length = 60.1e-3 # +- 0.5mm
     source_sizes = [200, 500, 1000] # in um, 200 is +- 6um, 500 and 1000 are +- 10um
-    sepeartion_sizes = [127, 254, 371] # in um, no listed variance
+    seperation_sizes = [127, 254, 371] # in um, no listed variance on VGA box
     colours = ['blue', 'green', 'red']
-    
     # variance on % is probably pretty high, I can calculate it out later
     
     for i in range(3):
-        theory = visTools.generateTheoreticalVisibility(sourcewidth=source_sizes[i]*10**-6, dist=path_length, baseline_space=baseline_space, wavelength=wavelength)
+        theory = visTools.generateTheoreticalVisibility(sourcewidth=source_sizes[i]*1e-6, dist=path_length, baseline_space=baseline_space, wavelength=wavelength)
+        
+        for j in range(3):
+            set_point = theory[np.absolute(np.array(baseline_space)-seperation_sizes[j]*1e-6).argmin()]*100
+            print('Theory of {}um source, {}um seperation is {:.2f}%'.format(source_sizes[i], seperation_sizes[j], set_point))
         plt.plot(baseline_space*10**6, theory, label='{}um theory'.format(source_sizes[i]), color=colours[i])
-        plt.axvline(x=sepeartion_sizes[i], color='r', linestyle='--') # vertical line for each baseline
+        plt.axvline(x=seperation_sizes[i], color='r', linestyle='--') # vertical line for each baseline
         
     #plt.plot(127, 0.159, label='LED - 200um source', marker='o') # for 14mm distance
-    plt.plot(sepeartion_sizes, [0.797, 0.584, 0.437], label='LED - 200um source', marker='o', linestyle='--', color=colours[0]) # for 60mm distance, 127um baseline, 200um source (second data run got 79.8%)
-    plt.plot(sepeartion_sizes, [0.469, 0.119, 0.077], label='LED - 500um source', marker='o', linestyle='--', color=colours[1]) # for 60mm distance, 127um baseline, 500um source (second data run got 48.4%)
+    plt.plot(seperation_sizes, [0.797, 0.584, 0.437], label='LED - 200um source', marker='o', linestyle='--', color=colours[0]) # for 60mm distance, 127um baseline, 200um source (second data run got 79.8%)
+    plt.plot(seperation_sizes, [0.469, 0.119, 0.077], label='LED - 500um source', marker='o', linestyle='--', color=colours[1]) # for 60mm distance, 127um baseline, 500um source (second data run got 48.4%)
     plt.plot([127, 254], [0.107, 0.084], label='LED - 1000um source', marker='o', linestyle='--', color=colours[2]) # for 60mm distance, 127um baseline, 1000um source
     tools.plotParams(title='Visibility vs Baseline', xlabel='Baseline (um)', ylabel='Visibility', ylim=[0, 1], legend='Source size')
-
+    
 plotTheoryCurve()
 plt.show()

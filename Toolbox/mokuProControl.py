@@ -16,7 +16,7 @@ def initialiseMokuProOsc(ip='10.42.0.55', integration_time = 1):
     return osc
 
 # Persist from current state (so that the TFA can pass counts to the osc, this isnt possible without persist)
-def initialisePersistMokuPro():
+def initialisePersistMokuPro(window_length=1e-3):
     m = MultiInstrument(ip='10.42.0.55', force_connect=True, platform_id=4, persist_state=True)
     tfa = m.set_instrument(1, TimeFrequencyAnalyzer)
     osc = m.set_instrument(2, Oscilloscope) 
@@ -31,6 +31,7 @@ def initialisePersistMokuPro():
     m.set_frontend(1, impedance="1MOhm", coupling="DC", attenuation='0dB') # input from SNSPD for MIM
     m.set_frontend(2, impedance="1MOhm", coupling="DC", attenuation='0dB') # input from SNSPD for MIM
     
+    tfa.set_acquisition_mode('Windowed', window_length=window_length)
     osc.set_acquisition_mode(mode='Precision')
     
     #wg.generate_waveform(1, "Ramp", amplitude=1, frequency=1, offset=0.5, symmetry=0)

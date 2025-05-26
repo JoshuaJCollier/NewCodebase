@@ -4,6 +4,7 @@
 # Notes: All docstrings up to date as 03 Apr 2025
 
 # --- Imports ---
+import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,8 +12,9 @@ import scipy as sp
 from scipy.signal import savgol_filter, find_peaks
 from scipy.special import j0, j1
 from scipy.ndimage import gaussian_filter1d
-import sys
-import myTools as tools
+
+# --- Internal imports ---
+import generalTools as tools
 
 # --- Functions ---
 def getVisibility(max, min):

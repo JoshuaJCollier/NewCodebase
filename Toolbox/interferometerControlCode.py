@@ -1,24 +1,24 @@
-import re
+
+# --- Imports ---
 import time
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import pickle
 import pandas as pd
-import scipy as sp
-from scipy.signal import savgol_filter, find_peaks
-from scipy.special import j0, j1
+from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 
+# --- Internal imporst ---
 from mokuProControl import *
 from kinesisMotorControl import *
 from uITLA.uITLAControl import *
 from saving import *
-from myTools import movingAverage, findNearest
+from generalTools import movingAverage, findNearest
 from visibilityTools import getVisibility
 
 def quit(moku=None, motor=None, laser=None):
-    """ Quits all open devices
+    """ Quits all provided devices
 
     Args:
         moku (_type_, optional): Moku object (from Moku:Pro). Defaults to None.
@@ -58,7 +58,7 @@ def removeOutliers(data1, data2, exclusion=0.5):
     mid = int(np.argmax(data_mid)*(total_len/len(data_mid)))
     return data1, data2, mid
 
-def findVis(data):
+def findVis(data, sigma=3):
     """ Find peaks and troughs of data set and then find the visibility from these
 
     Args:
@@ -67,7 +67,7 @@ def findVis(data):
     Returns:
         tuple: Visibility, and the values used to get it
     """
-    slc = gaussian_filter1d(data, sigma=2) # filter the peaks the remove noise,
+    slc = gaussian_filter1d(data, sigma=sigma) # filter the peaks the remove noise,
     peaks = find_peaks(slc)[0] # [0] returns only locations 
     troughs = find_peaks(-slc)[0] # [0] returns only locations 
 
@@ -143,18 +143,20 @@ def menloDataRun(uITLA = False, first_pos=0e-3, last_pos=6e-3, integration_time=
     
     print('Plot finished')
 
-def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um'):    
-    m, tfa, osc = initialisePersistMokuPro()
+def snspdMeasure(window_length=1e-3, saving=False, source_size='200um', dist='60mm', baseline='127um'):    
+    m, tfa, osc = initialisePersistMokuPro(window_length=window_length)
     motor = initialiseMotor("26003312")
     
     osc.enable_rollmode(False)
     osc.set_timebase(-1, 0, max_length=16384)
     
     # Initialisation
-    first_pos = 0e-3
-    last_pos = 6e-3
+    first_pos = 2.5e-3
+    last_pos = 3.5e-3
     total_time = 1000
     dataList = []
+    #motorPos = []
+    #times = []
     data1 = np.array([])
     data2 = np.array([])
     
@@ -162,16 +164,22 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
     print('Returning to start...')
     moveMotor(motor, pos=first_pos, acc=1e-3, max_vel=1e-3, delay=0)
     motor.wait_move() # Move to start
+    #last_time = getMotorPos(motor)
     print('At start. Now moving...')
-    moveMotor(motor, pos=last_pos, acc=1e-3, max_vel=last_pos/total_time, delay=0) # position in m, time in s
+    moveMotor(motor, pos=last_pos, acc=1e-3, max_vel=(last_pos-first_pos)/total_time, delay=0) # position in m, time in s
     pbar = tqdm(desc='Progress', total = total_time)
     start = time.perf_counter()
     while (time.perf_counter()-start) < total_time:
         start_itt = time.perf_counter()
         #print('Start {}th at {}s'.format(i, time.perf_counter()-start))
-        dataList.append(osc.get_data(wait_complete=True))
-        pbar.update(time.perf_counter()-start_itt)
+        dataList.append(osc.get_data(wait_complete=True)) # WAS TRUE
+        #curr_motor_pos = getMotorPos(motor)
+        #motorPos.append(curr_motor_pos-last_time)
+        instance_time = time.perf_counter()-start_itt
+        #times.append(instance_time)
+        pbar.update(instance_time)
     pbar.close()
+    print('Finished motor pos = {:.3f}mm'.format(getMotorPos(motor)*1e3))
     print('Finished {}s'.format(time.perf_counter()-start))
     
     # Process data
@@ -184,7 +192,7 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
         
     ch3_offset, ch4_offset = 0, 0
     count_to_signal = 100e-6 # 100e-6 is for 100uV / count
-    snspd_integration_time = 1e-2 # 10ms buckets
+    snspd_integration_time = window_length # 10ms buckets
     data1 = np.round((data1+ch3_offset)/(count_to_signal*snspd_integration_time)).astype(int)
     data2 = np.round((data2+ch4_offset)/(count_to_signal*snspd_integration_time)).astype(int)
     
@@ -200,26 +208,37 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
     data1 = np.average(data1[0:dividable_len].reshape(-1, averaging_no), axis=1)
     data2 = np.average(data2[0:dividable_len].reshape(-1, averaging_no), axis=1)
     
-    modified_data1, modified_data2, mid_index = removeOutliers(data1, data2, exclusion= 0.5)
-    data1_vis, valsUsed1 = findVis(modified_data1)
-    data2_vis, valsUsed2 = findVis(modified_data2)
+    modified_data1, modified_data2, mid_index = removeOutliers(data1, data2, exclusion=0.3)
+    data1_vis, valsUsed1 = findVis(modified_data1, sigma=10)
+    data2_vis, valsUsed2 = findVis(modified_data2, sigma=10)
     vis = np.max([data1_vis, data2_vis])
     
     print('Visibility from data1: {}, from data2: {}'.format(data1_vis, data2_vis))
+    #measured_pos = np.array(motorPos)
+    #pos_step = measured_pos[1:] - measured_pos[:-1]
+    #pos_step = np.insert(pos_step, 0, measured_pos[0])
+    #positions = pos_step / np.array(times) * (1000 / len(measured_pos)) # gives m / s, which is then normalised to 1000s in n steps
+    #positions = positions*2*(10**3)
+    
+    #plt.plot(times, positions)
+    #plt.show()
+    
     positions = np.linspace(first_pos, last_pos, len(data1))*2e3 # Converted to mm path length added
     positions = positions - positions[mid_index] # Finding the fringe peak
     
     osc.enable_rollmode(True)
     quit(moku=osc, motor=motor)
     
-    plot_params = "plt.setp(plt.gca(), xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')"
+    plot_params = "plt.setp(plt.gca(), xlabel='Path length difference (mm)', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')"
     if saving:
         all_outs = np.array([data1, data2, positions]).T
         headers = ['Output1 (cnt)', 'Output2 (cnt)', 'Positions (mm)']
         df = pd.DataFrame(all_outs, columns=headers) #df.to_csv('{}.csv'.format(filename), header=True, sep=',')
         metadata = generateMetadata('LED', source_size, dist, baseline, pol=0, parts={}, 
                                     params = {'plot params':plot_params, 'snspd integration (s)':snspd_integration_time, 'volt per count':count_to_signal, 
-                                              'moku inputs':'DC 1Mohm 400mVpp', 'measured vis':{'ch1':data1_vis,'ch2':data2_vis}, 'data runtime':total_time})
+                                              'moku inputs':'DC 1Mohm 400mVpp', 'measured vis':{'ch1':float(data1_vis),'ch2':float(data2_vis)}, 
+                                              'data runtime':total_time, 'data length':len(data1), 'start pos (m)': first_pos,
+                                              'end pos(m)': last_pos})
         save('interferometer', df, metadata)
     
     print('Plotting')
@@ -228,7 +247,7 @@ def snspdMeasure(saving=False, source_size='200um', dist='60mm', baseline='127um
     plt.plot(positions, modified_data2, label='SNSPD 2')
     plt.plot(positions[valsUsed1], data1[valsUsed1], marker='o', label='Vals Used 1')
     plt.plot(positions[valsUsed2], data2[valsUsed2], marker='o', label='Vals Used 2')
-    plt.setp(plt.gca(), xlabel='Path length difference', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
+    plt.setp(plt.gca(), xlabel='Path length difference (mm)', ylabel='Counts', ylim=[0, 1e6], title='Counts vs Position (outliers removed)')
     #plt.xlabel('Path length difference')
     #plt.ylabel('Counts')
     #plt.title('Counts vs Position (outliers removed)')
@@ -244,9 +263,10 @@ def testingLoad(campaign, index):
     positions = np.array(df['Positions (mm)'])
     data1, data2, mid_index = removeOutliers(data1, data2, exclusion=0.3)
     positions = positions - positions[mid_index]
-    data1_vis, valsUsed1 = findVis(data1)
-    data2_vis, valsUsed2 = findVis(data2)
+    data1_vis, valsUsed1 = findVis(data1, sigma=10)
+    data2_vis, valsUsed2 = findVis(data2, sigma=10)
     
+    print('Visibilities: {:.2f}%, {:.2f}%'.format(data1_vis*100, data2_vis*100))
     print('Plotting')
     plt.figure(0)
     
@@ -259,6 +279,6 @@ def testingLoad(campaign, index):
     plt.legend()
     plt.show()
     
-#testingLoad('interferometer', 1)
+#testingLoad('interferometer', 12)
 
-snspdMeasure(saving=True, source_size='500um')
+snspdMeasure(window_length=1e-2, saving=True, source_size='1000um', baseline='127um')
